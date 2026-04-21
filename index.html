@@ -811,12 +811,20 @@ function generatePDF(){
   <div class="fbar-wrap"><div class="fbar"></div></div>
   </div>`;
 
-  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${css}</style></head><body>${page1}${page2}</body></html>`;
-  const w=window.open('','_blank','width=900,height=700');
-  if(!w){toast("Allow pop-ups for this site","info");return;}
-  w.document.write(html); w.document.close();
-  w.onload=()=>{w.focus();w.print();};
-  finalizeRunning(); toast("Opening PDF...");
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${css}</style></head><body>${page1}</body></html>`;
+  // Use Blob URL — works in Chrome iframe environments
+  const blob = new Blob([html], {type:'text/html'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 5000);
+  finalizeRunning();
+  toast("PDF opened in new tab — use Ctrl+P or ⌘P to print/save");
 }
 
 // SAVE / LOAD
