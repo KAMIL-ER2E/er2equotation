@@ -68,6 +68,7 @@ textarea{resize:vertical;min-height:65px}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 @media(max-width:600px){.grid2,.grid3,.grid4{grid-template-columns:1fr 1fr}.grid3,.grid4{grid-template-columns:1fr}.body{padding:14px 12px}}
 </style>
+<base target="_blank">
 </head>
 <body>
 <div id="toast"></div>
@@ -160,8 +161,8 @@ textarea{resize:vertical;min-height:65px}
     <div class="sec-title">Signed By (ER2E)</div>
     <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:8px 0">
       <div style="position:relative;width:180px;height:88px;flex-shrink:0">
-        <img src="https://i.imgur.com/9DaSz3O.png" style="position:absolute;bottom:0;left:0;height:72px;mix-blend-mode:multiply;opacity:0.85" onerror="this.style.display='none'">
-        <img src="https://i.imgur.com/cWMBOVb.png" style="position:absolute;bottom:-6px;left:52px;height:84px;mix-blend-mode:multiply;opacity:0.75" onerror="this.style.display='none'">
+        <img src="https://i.imgur.com/9DaSz3O.png " style="position:absolute;bottom:0;left:0;height:72px;mix-blend-mode:multiply;opacity:0.85" onerror="this.style.display='none'">
+        <img src="https://i.imgur.com/cWMBOVb.png " style="position:absolute;bottom:-6px;left:52px;height:84px;mix-blend-mode:multiply;opacity:0.75" onerror="this.style.display='none'">
       </div>
       <div>
         <div style="border-top:1.5px solid #111;width:200px;margin-bottom:5px"></div>
@@ -261,9 +262,9 @@ textarea{resize:vertical;min-height:65px}
 </div>
 
 <script>
-const SIG_URL="https://i.imgur.com/9DaSz3O.png";
-const COP_URL="https://i.imgur.com/cWMBOVb.png";
-const LOGO_URL="https://i.imgur.com/m64szz8.png";
+const SIG_URL="https://i.imgur.com/9DaSz3O.png ";
+const COP_URL="https://i.imgur.com/cWMBOVb.png ";
+const LOGO_URL="https://i.imgur.com/m64szz8.png ";
 
 const STAFF_LIST=[
   {name:"Romy Eaduka",team:"M1"},{name:"Sajali Basro",team:"M2"},
@@ -581,18 +582,31 @@ function generatePDF(){
   const addrLines=cAddr.split("\n").filter(Boolean);
   const minInvStr=cLoc&&minInvoice[cLoc]!==undefined?fmt(minInvoice[cLoc]):"7,500.00";
   const trFee=cLoc?(TRANSPORT.find(([l])=>l===cLoc)?.[1]||0):0;
-  const trFeeStr=fmt(trFee);
 
   // Final TC with substituted values
   const tcFinal=tcTexts.map(t=>
     t.replace("{paymentDays}",tcValues.paymentDays||"30")
      .replace("{validityDays}",tcValues.validityDays||"30")
-     .replace("{transportFee}",trFeeStr)
+     .replace("{transportFee}",fmt(trFee))
      .replace("{minInvoice}","RM"+minInvStr)
   );
 
+  // ── SMART PAGE BREAK LOGIC ───────────────────────────────────────────
+  // A4 content height ≈ 970px at 96dpi with 20mm margins.
+  // If everything fits comfortably on one page, force a break so the
+  // signature lands on page 2 (professional look). If T&C is long and
+  // already spills to page 2, DON'T force a break — let it flow naturally
+  // so the signature stays on page 2 instead of being pushed to page 3.
+  const A4_CONTENT_PX = 970;
+  const BASE_HEIGHT   = 340;  // header + client block + intro + table header
+  const ROW_HEIGHT    = 48;   // per waste item
+  const TC_ITEM_HEIGHT= 38;   // per T&C bullet (conservative average)
+  const SIG_HEIGHT    = 210;  // signature + footer block
+  const estimatedHeight = BASE_HEIGHT + (items.length * ROW_HEIGHT) + (tcFinal.length * TC_ITEM_HEIGHT) + SIG_HEIGHT;
+  const needsForcedBreak = estimatedHeight < 860; // only force if well under one page
+
   const showTrPrice = document.querySelector('input[name="trfee"]:checked')?.value === "include";
-  const trFeeDisplay = showTrPrice ? fmtRM(trFeeVal) : "";
+  const trFeeDisplay = showTrPrice ? fmt(trFee) : "";
 
   const tableRows=items.map((it,i)=>`
     <tr>
@@ -612,23 +626,17 @@ function generatePDF(){
     </tr>`;
 
   // ── PDF CSS ──────────────────────────────────────────────────────────
-  // Key: @page sets 20mm margins on all sides. Header/footer repeat via
-  // position:running() is not universally supported, so we use a simpler
-  // approach: one long document, browser handles page breaks naturally.
-  // The green bar is at the very end; footer text is inline before it.
-
   const pdfCSS=`
     @page { size:A4; margin:20mm 20mm 22mm 20mm; }
     * { box-sizing:border-box; margin:0; padding:0; }
     body { font-family:'Calibri',Calibri,sans-serif; font-size:10pt; color:#111; background:#fff; }
 
-    /* ── HEADER — repeats on every page ── */
+    /* ── HEADER ── */
     .doc-header {
       display:flex; justify-content:space-between; align-items:flex-start;
       border-bottom:2.5px solid #0a5c2e; padding-bottom:10px; margin-bottom:14px;
       page-break-inside:avoid;
     }
-    .pg2-header { margin-top:0; }
     .co-name { font-family:'Calibri',Calibri,sans-serif; font-size:10.5pt; font-weight:700; }
     .co-info { font-family:'Calibri',Calibri,sans-serif; font-size:7.5pt; color:#444; margin-top:3px; line-height:1.55; }
     .er2e-logo { height:48px; object-fit:contain; }
@@ -699,6 +707,57 @@ function generatePDF(){
       <img src="${LOGO_URL}" class="er2e-logo" onerror="this.style.display='none'">
     </div>`;
 
+  // Build page-2 meta block (only used when we force a break)
+  const page2Meta = `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
+      <div class="meta-block">
+        <div><strong>QUOT.NO:</strong><br><span class="qno">${quotNo}</span></div>
+        <div style="margin-top:4px"><strong>Page No</strong><br>2 of 2</div>
+        <div><strong>Dept</strong><br>Marketing</div>
+        <div><strong>Currency</strong><br>MYR</div>
+        <div><strong>Date</strong><br>${dateStr}</div>
+      </div>
+    </div>`;
+
+  // Build signature + closing block
+  const signatureBlock = `
+    <div class="sig-section">
+      <div class="closing">
+        We hope that our quotation is favourable to you, and we are looking forward to receiving your valued orders.
+        Should you require further clarification, please do not hesitate to contact us.<br><br>
+        Thank you
+      </div>
+      <div class="sig-grid">
+        <!-- ER2E side -->
+        <div class="sig-left">
+          <div class="sig-yourssincerely">Yours sincerely,</div>
+          <div class="sig-behalf">For and on behalf of,</div>
+          <div class="sig-company">Econas Resource To Energy Sdn. Bhd</div>
+          <div class="sig-img-wrap">
+            <img src="${SIG_URL}" style="position:absolute;bottom:0;left:0;height:70px;mix-blend-mode:multiply;opacity:0.85" onerror="this.style.display='none'">
+            <img src="${COP_URL}" style="position:absolute;bottom:-6px;left:48px;height:80px;mix-blend-mode:multiply;opacity:0.75" onerror="this.style.display='none'">
+          </div>
+          <div class="sig-line" style="width:240px"></div>
+          <div class="sig-name">ROMY EADUKA BIN SHAHRUDDIN</div>
+          <div class="sig-designation">Head of Sales, Marketing, Business Development &amp; Liaison</div>
+        </div>
+        <!-- Client side -->
+        <div class="sig-right">
+          <div class="acc-behalf">Accepted and agreed by,</div>
+          <div class="acc-company">${cName}</div>
+          <div class="acc-space"></div>
+          <div class="acc-line"></div>
+          <div class="acc-name">Name: &nbsp;___________________________</div>
+          <div class="acc-date">Date: &nbsp;&nbsp;&nbsp;___________________________</div>
+        </div>
+      </div>
+    </div>
+    <div class="doc-footer">
+      <span>QUOT.NO: ${quotNo}</span>
+      <span>Dept: Marketing &nbsp;|&nbsp; Currency: MYR &nbsp;|&nbsp; Date: ${dateStr}</span>
+    </div>
+    <div class="green-bar"></div>`;
+
   const html=`<!DOCTYPE html>
 <html><head><meta charset="UTF-8">
 <style>${pdfCSS}</style>
@@ -760,64 +819,10 @@ function generatePDF(){
     ${tcFinal.map(t=>`<li>${t}</li>`).join("\n    ")}
   </ol>
 
-  <!-- PAGE BREAK — page 2 starts here -->
-  <div class="page-break">
-
-    <!-- PAGE 2 HEADER — letterhead repeats -->
-    ${headerHTML}
-
-    <!-- PAGE 2 META (right-aligned only) -->
-    <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
-      <div class="meta-block">
-        <div><strong>QUOT.NO:</strong><br><span class="qno">${quotNo}</span></div>
-        <div style="margin-top:4px"><strong>Page No</strong><br>2 of 2</div>
-        <div><strong>Dept</strong><br>Marketing</div>
-        <div><strong>Currency</strong><br>MYR</div>
-        <div><strong>Date</strong><br>${dateStr}</div>
-      </div>
-    </div>
-
-    <!-- CLOSING + SIGNATURE -->
-    <div class="sig-section">
-      <div class="closing">
-        We hope that our quotation is favourable to you, and we are looking forward to receiving your valued orders.
-        Should you require further clarification, please do not hesitate to contact us.<br><br>
-        Thank you
-      </div>
-      <div class="sig-grid">
-        <!-- ER2E side -->
-        <div class="sig-left">
-          <div class="sig-yourssincerely">Yours sincerely,</div>
-          <div class="sig-behalf">For and on behalf of,</div>
-          <div class="sig-company">Econas Resource To Energy Sdn. Bhd</div>
-          <div class="sig-img-wrap">
-            <img src="${SIG_URL}" style="position:absolute;bottom:0;left:0;height:70px;mix-blend-mode:multiply;opacity:0.85" onerror="this.style.display='none'">
-            <img src="${COP_URL}" style="position:absolute;bottom:-6px;left:48px;height:80px;mix-blend-mode:multiply;opacity:0.75" onerror="this.style.display='none'">
-          </div>
-          <div class="sig-line" style="width:240px"></div>
-          <div class="sig-name">ROMY EADUKA BIN SHAHRUDDIN</div>
-          <div class="sig-designation">Head of Sales, Marketing, Business Development &amp; Liaison</div>
-        </div>
-        <!-- Client side — aligned to match left -->
-        <div class="sig-right">
-          <div class="acc-behalf">Accepted and agreed by,</div>
-          <div class="acc-company">${cName}</div>
-          <div class="acc-space"></div>
-          <div class="acc-line"></div>
-          <div class="acc-name">Name: &nbsp;___________________________</div>
-          <div class="acc-date">Date: &nbsp;&nbsp;&nbsp;___________________________</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- PAGE 2 FOOTER -->
-    <div class="doc-footer">
-      <span>QUOT.NO: ${quotNo}</span>
-      <span>Dept: Marketing &nbsp;|&nbsp; Currency: MYR &nbsp;|&nbsp; Date: ${dateStr}</span>
-    </div>
-    <div class="green-bar"></div>
-
-  </div><!-- end page-break -->
+  <!-- PAGE 2 SECTION ── conditional break ─────────────────────────────── -->
+  ${needsForcedBreak
+    ? `<div class="page-break">${headerHTML}${page2Meta}${signatureBlock}</div>`
+    : `<div style="margin-top:14px;">${signatureBlock}</div>`}
 
 </body></html>`;
 
